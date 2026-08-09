@@ -1247,4 +1247,13 @@ export const dict = {
   "workspace.reset.archived.one": "1 sesi akan diarsipkan.",
   "workspace.reset.archived.many": "{{count}} sesi akan diarsipkan.",
   "workspace.reset.note": "Ini akan mengatur ulang ruang kerja agar cocok dengan cabang bawaan.",
+  "command.session.multiplexer.new": "New multiplexed session",
+  "command.session.multiplexer.next": "Focus next session",
+  "command.session.multiplexer.prev": "Focus previous session",
+  "command.session.multiplexer.close": "Close focused session",
+  "session.multiplexer.title": "Sessions",
+  "session.multiplexer.untitled": "Untitled session",
+  "session.multiplexer.status.running": "Running",
+  "session.multiplexer.status.idle": "Idle",
+  "session.multiplexer.close.aria": "Close {{title}}",
 }
