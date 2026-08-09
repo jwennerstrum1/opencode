@@ -6,6 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./desktop-menu": "./src/desktop-menu.ts",
+    "./context/session-manager": "./src/context/session-manager.ts",
+    "./context/session-manager-driver": "./src/context/session-manager-driver.ts",
     "./i18n/desktop-native": "./src/i18n/desktop-native.ts",
     "./updater": "./src/updater.ts",
     "./wsl/types": "./src/wsl/types.ts",
