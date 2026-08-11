@@ -1,0 +1,257 @@
+---
+title: Multiplexing
+description: Run and switch between multiple concurrent agent sessions.
+---
+
+Session multiplexing lets you run several agent sessions at once and switch focus
+between them — spawn a new session, jump to another, and close ones you're done
+with, all without leaving OpenCode.
+
+Each session keeps its own conversation, agent, model, and working directory. The
+multiplexer only tracks which sessions exist and which one has focus; the sessions
+themselves are the same ones you already use.
+
+---
+
+## Why
+
+Coding rarely happens one thread at a time. You might have one session refactoring
+a module, another writing tests, and a third answering a question about an
+unfamiliar part of the codebase. Multiplexing is OpenCode's answer to that — the
+same idea as running multiple parallel conversations in Claude Code, so you can
+keep several agents working and move between them instead of waiting on one.
+
+---
+
+## Backward compatibility
+
+Multiplexing is fully additive. If you only ever use one session, nothing changes:
+OpenCode behaves exactly as it did before, with a single always-focused session and
+no extra chrome. The session switcher only appears once you have two or more
+sessions, and the existing session keybinds and commands are untouched.
+
+---
+
+## In the app
+
+In the interactive UI, the multiplexed sessions show up as a switcher strip in the
+title bar. Each entry shows the session's title, its agent, and a live status dot —
+accented while the session is **running**, muted while it's **idle**. The focused
+session is highlighted. Click an entry to focus it, or use the close button on an
+entry to close that session.
+
+:::note
+The strip is hidden while you have fewer than two sessions, so single-session usage
+looks exactly like before.
+:::
+
+### Keybinds
+
+The switcher registers these commands, each with a dedicated keybind. They're also
+available from the command palette (`mod+k` or `mod+shift+p`) under the **session**
+category.
+
+| Command                  | Keybind             | Action                                          |
+| ------------------------ | ------------------- | ----------------------------------------------- |
+| New multiplexed session  | `mod+shift+m`       | Spawn a new session and focus it                |
+| Focus next session       | `mod+shift+]`       | Move focus to the next session (wraps around)   |
+| Focus previous session   | `mod+shift+[`       | Move focus to the previous session (wraps)      |
+| Close focused session    | `mod+shift+w`       | Close the focused session                       |
+| Jump to session 1–9      | `mod+alt+1` … `mod+alt+9` | Focus the session at that position         |
+
+:::tip
+`mod` is `⌘` on macOS and `Ctrl` on Windows and Linux, and `alt` is `Option` on
+macOS. These chords are deliberately distinct from the existing tab shortcuts
+(`ctrl+tab`, `mod+1`–`mod+9`, `mod+w`) so nothing is shadowed.
+:::
+
+When you close the focused session, focus moves to the most recently focused
+surviving session, falling back to the most recently spawned one — so you're never
+left without a focused session while others remain.
+
+---
+
+## From the CLI
+
+The same operations are available headless and scriptable through
+`opencode session mux`. This is useful for automation, or for driving sessions from
+a terminal while the app is open.
+
+The CLI drives sessions on a **running** OpenCode server, so start one first:
+
+```bash
+opencode serve
+```
+
+Then point the commands at it. By default they use `http://127.0.0.1:4096`; override
+with `--url` or the `OPENCODE_SERVER` environment variable.
+
+### spawn
+
+Spawn a new session on the server and focus it.
+
+```bash
+opencode session mux spawn
+```
+
+Choose the agent and model, or spawn in the background without stealing focus:
+
+```bash
+opencode session mux spawn --agent build --model anthropic/claude-sonnet-4-20250514
+opencode session mux spawn --no-focus
+```
+
+#### Flags
+
+| Flag                                     | Short | Description                                                              |
+| ---------------------------------------- | ----- | ----------------------------------------------------------------------- |
+| <nobr><code>{"--agent"}</code></nobr>    |       | Agent to run in the session                                             |
+| <nobr><code>{"--model"}</code></nobr>    |       | Model as `providerID/modelID`                                           |
+| <nobr><code>{"--focus"}</code></nobr>    |       | Focus the new session (default; use `--no-focus` to spawn in background) |
+| <nobr><code>{"--format"}</code></nobr>   |       | Output format: `text` or `json` (text)                                  |
+
+### list
+
+List the multiplexed sessions the CLI is tracking that still exist on the server.
+The focused session is marked with a `*`.
+
+```bash
+opencode session mux list
+```
+
+```text
+   ID          AGENT  TITLE
+─────────────────────────────────────
+*  ses_abc123  build  Refactor auth module
+   ses_def456  plan   Draft the migration plan
+```
+
+Use `--format json` for machine-readable output. `ls` is an alias for `list`.
+
+#### Flags
+
+| Flag                                   | Description                             |
+| -------------------------------------- | --------------------------------------- |
+| <nobr><code>{"--format"}</code></nobr> | Output format: `table` or `json` (table) |
+
+### switch
+
+Switch focus to a session by id.
+
+```bash
+opencode session mux switch ses_def456
+```
+
+### close
+
+Close a session by id. If it held focus, focus moves to a surviving session using
+the same fallback as the app.
+
+```bash
+opencode session mux close ses_abc123
+```
+
+### Server flags
+
+Every `session mux` subcommand accepts the connection flags below.
+
+| Flag                                       | Short | Description                                                         |
+| ------------------------------------------ | ----- | ------------------------------------------------------------------ |
+| <nobr><code>{"--url"}</code></nobr>        | `-u`  | URL of the running server (`$OPENCODE_SERVER` or `http://127.0.0.1:4096`) |
+| <nobr><code>{"--directory"}</code></nobr>  |       | Project directory on the server                                    |
+| <nobr><code>{"--username"}</code></nobr>   |       | Basic auth username (`$OPENCODE_SERVER_USERNAME`, or `opencode`)   |
+| <nobr><code>{"--password"}</code></nobr>   | `-p`  | Basic auth password (`$OPENCODE_SERVER_PASSWORD`)                  |
+
+:::note
+The CLI keeps its own registry of tracked sessions per server URL, since a one-shot
+command can't hold the app's in-memory state between invocations. Session titles and
+agents are never stored there — `list` always reads them live from the server and
+shows only tracked sessions that still exist.
+:::
+
+---
+
+## Design
+
+This section is for contributors. It supersedes the standalone
+`packages/app/SESSION_MULTIPLEXER.md` design note — the multiplexer's design now
+lives here alongside the user-facing docs.
+
+Multiplexing is built in three additive layers over the existing session, provider,
+and agent primitives. Nothing in the single-session path is rewritten.
+
+### Core
+
+The core is one small, framework-agnostic module,
+`packages/app/src/context/session-manager.ts`. It owns exactly the multiplexing
+bookkeeping and nothing else:
+
+- which sessions exist and their spawn order,
+- which session has focus,
+- when each was last focused (used to pick a sensible focus target when the focused
+  session closes).
+
+Every side effect — actually creating or tearing down a session — is pushed behind
+a tiny `SessionDriver` seam:
+
+```ts
+interface SessionDriver {
+  create(input: SpawnInput): Promise<{ id; title?; agent?; directory? }>
+  close(id: string): Promise<void>
+}
+```
+
+The manager owns focus and registry logic; the driver owns I/O. This is what keeps
+the core a thin layer over existing primitives rather than a rewrite, and it's what
+makes the core trivially unit-testable without a running server.
+
+The manager holds a `Map<id, SessionSummary>`, an insertion-order id list, and a
+single `focusedID`. That's the whole model — no new lifecycle verbs and no sync
+machinery. A session's rich state (messages, permissions, cost, and so on) keeps
+living in the existing session primitives; the multiplexer only tracks identity and
+focus.
+
+Its operations are `spawn`, `list`, `focused`, `focus`, `close`, and `subscribe`.
+When the focused session is closed, focus moves to the **most recently focused
+survivor**, falling back to the **last spawned** survivor, and to nothing when the
+registry is empty. That fallback is a pure function, `nextFocusAfterClose`, so it's
+verified in isolation and reused by both the app and the CLI.
+
+The driver in `session-manager-driver.ts` binds `SessionDriver` to the OpenCode SDK
+v2 session client — `create` maps to the same `session.create` call the app already
+uses, and `close` maps to the session-interrupt primitive. Durable archival and
+deletion are intentionally out of the core `close` contract: the core only
+guarantees a session stops being tracked and driven.
+
+### App (session switcher)
+
+The switcher in `packages/app/src/components/session-switcher.tsx` is a thin UI over
+the core. It renders the title-bar strip and registers the commands and keybinds
+documented [above](#in-the-app). Presentation logic that doesn't need reactivity —
+building the entry list, cycling focus, jump-to-index — lives in the pure helpers in
+`session-multiplexer-nav.ts` so it can be tested without mounting the UI.
+
+### CLI
+
+`packages/opencode/src/cli/cmd/session-mux.ts` exposes the same core headlessly as
+`opencode session mux`. Because a one-shot CLI process can't hold the manager's
+in-memory registry across invocations, it persists the minimal registry (tracked
+session ids plus the focused one) per server URL under the OpenCode state directory,
+and reuses `createClientSessionDriver` and `nextFocusAfterClose` unchanged so it
+behaves like the in-process manager.
+
+### Additivity
+
+A manager that only ever spawns one session behaves exactly like today's
+single-session flow: one session, always focused. That invariant is pinned by a
+test, and the switcher stays hidden below two sessions, so existing workflows are
+untouched.
+
+---
+
+## Related
+
+- [TUI](/docs/tui) — the interactive terminal interface.
+- [CLI](/docs/cli) — the full command reference.
+- [Keybinds](/docs/keybinds) — customizing keybinds.
+- [Agents](/docs/agents) — configuring the agents you spawn sessions with.
