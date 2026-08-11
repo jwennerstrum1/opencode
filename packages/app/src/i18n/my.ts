@@ -1173,4 +1173,13 @@ export const dict = {
   "workspace.reset.archived.many": "{{count}} ဆက်ရှင်များကို သိမ်းဆည်းထားပါမည်။",
   "workspace.reset.note": "၎င်းသည် မူရင်းဌာနခွဲနှင့် ကိုက်ညီစေရန် အလုပ်ခွင်ကို ပြန်လည်သတ်မှတ်ပါမည်။",
   "dialog.usageExceeded.dontShowAgain": "ထပ်မပြပါနှင့်",
+  "command.session.multiplexer.new": "New multiplexed session",
+  "command.session.multiplexer.next": "Focus next session",
+  "command.session.multiplexer.prev": "Focus previous session",
+  "command.session.multiplexer.close": "Close focused session",
+  "session.multiplexer.title": "Sessions",
+  "session.multiplexer.untitled": "Untitled session",
+  "session.multiplexer.status.running": "Running",
+  "session.multiplexer.status.idle": "Idle",
+  "session.multiplexer.close.aria": "Close {{title}}",
 }

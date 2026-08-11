@@ -1164,4 +1164,13 @@ export const dict = {
 
   "desktop.picker.error.notSelected": "선택기에서 파일을 선택하지 않았습니다",
   "desktop.picker.error.sizeLimit": "선택한 첨부 파일이 {{limit}} MB 제한을 초과합니다",
+  "command.session.multiplexer.new": "New multiplexed session",
+  "command.session.multiplexer.next": "Focus next session",
+  "command.session.multiplexer.prev": "Focus previous session",
+  "command.session.multiplexer.close": "Close focused session",
+  "session.multiplexer.title": "Sessions",
+  "session.multiplexer.untitled": "Untitled session",
+  "session.multiplexer.status.running": "Running",
+  "session.multiplexer.status.idle": "Idle",
+  "session.multiplexer.close.aria": "Close {{title}}",
 }

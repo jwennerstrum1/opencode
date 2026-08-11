@@ -1150,4 +1150,13 @@ export const dict: Record<string, string> = {
   "workspace.reset.archived.many": "සැසි {{count}} සංරක්ෂිත වනු ඇත.",
   "workspace.reset.note": "මෙය පෙරනිමි ශාඛාවට ගැලපෙන පරිදි වැඩබිම නැවත සකසනු ඇත.",
   "dialog.usageExceeded.dontShowAgain": "නැවත නොපෙන්වන්න",
+  "command.session.multiplexer.new": "New multiplexed session",
+  "command.session.multiplexer.next": "Focus next session",
+  "command.session.multiplexer.prev": "Focus previous session",
+  "command.session.multiplexer.close": "Close focused session",
+  "session.multiplexer.title": "Sessions",
+  "session.multiplexer.untitled": "Untitled session",
+  "session.multiplexer.status.running": "Running",
+  "session.multiplexer.status.idle": "Idle",
+  "session.multiplexer.close.aria": "Close {{title}}",
 }

@@ -1220,4 +1220,13 @@ export const dict = {
   "error.childStore.persistedProjectIconCreateFailed": "建立持續性專案圖示失敗",
   "error.childStore.storeCreateFailed": "建立儲存區失敗",
   "terminal.connectionLost.abnormalClose": "WebSocket 異常關閉：{{code}}",
+  "command.session.multiplexer.new": "New multiplexed session",
+  "command.session.multiplexer.next": "Focus next session",
+  "command.session.multiplexer.prev": "Focus previous session",
+  "command.session.multiplexer.close": "Close focused session",
+  "session.multiplexer.title": "Sessions",
+  "session.multiplexer.untitled": "Untitled session",
+  "session.multiplexer.status.running": "Running",
+  "session.multiplexer.status.idle": "Idle",
+  "session.multiplexer.close.aria": "Close {{title}}",
 } satisfies Partial<Record<Keys, string>>

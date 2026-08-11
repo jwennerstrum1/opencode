@@ -29,6 +29,8 @@ import { useSettings } from "@/context/settings"
 import { WindowsAppMenu } from "./windows-app-menu"
 import { applyPath, backPath, forwardPath } from "./titlebar-history"
 import { TitlebarTabStrip } from "@/components/titlebar-tab-strip"
+import { SessionSwitcher } from "@/components/session-switcher"
+import type { SessionRunState } from "@/context/session-multiplexer-nav"
 import { makeEventListener } from "@solid-primitives/event-listener"
 import { createMediaQuery } from "@solid-primitives/media"
 import { readSessionTabsRemovedDetail, SESSION_TABS_REMOVED_EVENT } from "@/components/titlebar-session-events"
@@ -197,6 +199,14 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
             const tabs = useTabs()
             const tabsStore = tabs.store
             const tabsStoreActions = tabs
+
+            // Live running/idle status for switcher entries, read from the active
+            // server's session sync state.
+            const sessionRunStatus = (id: string): SessionRunState => {
+              const conn = server.current
+              if (!conn) return "idle"
+              return global.ensureServerCtx(conn).sync.session.data.session_working(id) ? "running" : "idle"
+            }
             const [session] = createResource(
               () => {
                 const route = layout.route()
@@ -410,6 +420,7 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                   }}
                   onReorder={(keys) => tabsStoreActions.reorder(keys)}
                 />
+                <SessionSwitcher status={sessionRunStatus} />
                 <TooltipV2
                   placement="bottom"
                   value={
