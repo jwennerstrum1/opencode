@@ -15,8 +15,6 @@
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { onCleanup } from "solid-js"
 import { createStore, reconcile } from "solid-js/store"
-import { useNavigate } from "@solidjs/router"
-import { sessionHref } from "@/utils/session-route"
 import { normalizeSessionInfo } from "@/utils/session"
 import { useGlobal } from "./global"
 import { useServer } from "./server"
@@ -72,10 +70,16 @@ export function createSessionMultiplexer(driver: SessionDriver, hooks: SessionMu
 
   const close = async (id: string) => {
     await manager.close(id)
-    hooks.onClose?.(id)
-    // Route to the survivor the core moved focus to, if any.
+    // Focus the survivor the core picked BEFORE dropping the closed tab. Order
+    // matters: the tab layer runs its own removal-navigation when the tab being
+    // removed is still the active/focused one, and that navigation lands on a
+    // positionally-adjacent tab that can differ from the core's survivor. By
+    // making the survivor active first (onFocus), the subsequent onClose removes
+    // an already-inactive tab, so the tab layer stays quiet and the core's
+    // survivor remains the single source of truth for focus.
     const survivor = summaryOf(state.focusedID)
     if (survivor) hooks.onFocus?.(survivor)
+    hooks.onClose?.(id)
   }
 
   const closeFocused = async () => {
@@ -106,7 +110,6 @@ export const { use: useSessionMultiplexer, provider: SessionMultiplexerProvider 
     const global = useGlobal()
     const server = useServer()
     const tabs = useTabs()
-    const navigate = useNavigate()
 
     // The active server's session API — the same protocol-compatible client the
     // prompt uses to create sessions and interrupt runs (see
@@ -143,10 +146,13 @@ export const { use: useSessionMultiplexer, provider: SessionMultiplexerProvider 
 
     const mux = createSessionMultiplexer(driver, {
       onSpawn: (session) => ensureTab(session),
-      onFocus: (session) => {
-        ensureTab(session)
-        navigate(sessionHref(server.key, session.id))
-      },
+      // Route focus through the tab layer's own selection primitive rather than a
+      // bare navigate. `tabs.select` marks the target as the recent/active tab in
+      // addition to navigating (same URL as `sessionHref`), which keeps the tab
+      // layer's notion of the active tab in sync with multiplexer focus. Without
+      // that, closing the focused session leaves the closed tab marked active and
+      // the tab layer re-navigates away from the survivor the core just picked.
+      onFocus: (session) => tabs.select(ensureTab(session)),
       onClose: (id) => tabs.removeSessionTab({ server: server.key, sessionId: id }),
     })
 

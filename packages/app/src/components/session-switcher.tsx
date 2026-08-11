@@ -24,10 +24,17 @@ import { showToast } from "@/utils/toast"
 
 // Dedicated chords so the switcher coexists with the existing tab shortcuts
 // (ctrl+tab, mod+option+arrows, mod+1..9, mod+w) rather than shadowing them.
+//
+// next/prev use the "previous/next tab" bracket chord. The keybind matcher
+// compares against `event.key` (see command.tsx `matchKeybind`), and holding
+// shift turns `[`/`]` into `{`/`}` — so the token must be the shifted glyph the
+// browser actually reports, not `bracketleft`/`bracketright` (which are
+// `event.code` values and never match `event.key`). This mirrors how the
+// existing `shift+plus` chord is expressed against the produced character.
 export const SESSION_SWITCHER_KEYBINDS = {
   new: "mod+shift+m",
-  next: "mod+shift+bracketright",
-  prev: "mod+shift+bracketleft",
+  next: "mod+shift+}",
+  prev: "mod+shift+{",
   close: "mod+shift+w",
   jump: (position: number) => `mod+alt+${position}`,
 } as const
