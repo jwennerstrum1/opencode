@@ -28,11 +28,18 @@ export interface MockServerConfig {
   fileContent?: (path: string) => unknown | Promise<unknown>
   findFiles?: (input: { query: string; dirs?: string; limit?: number }) => unknown
   sessionStatus?: Record<string, unknown> | (() => Record<string, unknown>)
+  // Identities handed back for successive session-create calls (spawn), in
+  // order. Exhausting the list falls back to generated ids/titles. Each created
+  // session is appended to `sessions` so later list/get/message routes see it —
+  // mirroring how a real server materializes a spawned session.
+  createdSessions?: ReadonlyArray<{ id: string; title?: string; agent?: string; directory?: string }>
+  onCreateSession?: (input: { index: number; id: string; body: unknown }) => void
 }
 
 export async function mockOpenCodeServer(page: Page, config: MockServerConfig) {
   const cursors = new Map<string, string>()
   let nextCursor = 0
+  let createdCount = 0
   const staticRoutes: Record<string, unknown> = {
     "/path": {
       state: config.directory,
@@ -57,6 +64,37 @@ export async function mockOpenCodeServer(page: Page, config: MockServerConfig) {
     if (url.port !== targetPort && url.port !== appPort) return route.fallback()
 
     const path = url.pathname
+
+    // Session creation (spawn). v1 posts to /session, v2 to /api/session. Both
+    // are handled here, ahead of the list routes, so a spawn materializes a new
+    // session the subsequent get/list/message routes can serve.
+    if ((path === "/session" || path === "/api/session") && route.request().method() === "POST") {
+      const index = createdCount++
+      const spec = config.createdSessions?.[index] ?? {
+        id: `ses_created_${index + 1}`,
+        title: `New session ${index + 1}`,
+      }
+      const created = {
+        id: spec.id,
+        title: spec.title ?? spec.id,
+        projectID: (config.project as { id?: string }).id ?? "project",
+        agent: spec.agent ?? "build",
+        directory: spec.directory ?? config.directory,
+        time: { created: 1700000000000 + index, updated: 1700000000000 + index },
+      }
+      config.sessions.push(created)
+      let body: unknown
+      try {
+        body = route.request().postDataJSON()
+      } catch {
+        body = undefined
+      }
+      config.onCreateSession?.({ index, id: created.id, body })
+      return path === "/api/session"
+        ? json(route, { data: currentSession(created, config.directory) })
+        : json(route, created)
+    }
+
     if (path === "/global/event" || path === "/event" || path === "/api/event") {
       const events = config.events?.()
       return sse(
