@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { SESSION_SWITCHER_KEYBINDS } from "./session-switcher"
+import { matchKeybind, parseKeybind } from "@/context/command"
 import { buildSwitcherEntries } from "@/context/session-multiplexer-nav"
 import type { SessionSummary } from "@/context/session-manager"
 
@@ -39,8 +40,10 @@ describe("SessionSwitcher entries", () => {
 })
 
 describe("SESSION_SWITCHER_KEYBINDS", () => {
-  // Guards against silently colliding with the existing tab shortcuts
-  // (ctrl+tab, mod+option+arrows, mod+1..9, mod+w, mod+shift+t).
+  // Guards against silently colliding with the existing tab/navigation shortcuts.
+  // Includes the bracket chords already bound elsewhere so next/prev can't be
+  // "fixed" back onto an occupied slot: mod+[ / mod+] (go back/forward, titlebar)
+  // and mod+alt+[ / mod+alt+] (previous/next message, use-session-commands).
   const existingTabKeybinds = new Set([
     "mod+option+arrowleft",
     "ctrl+shift+tab",
@@ -48,6 +51,10 @@ describe("SESSION_SWITCHER_KEYBINDS", () => {
     "ctrl+tab",
     "mod+w",
     "mod+shift+t",
+    "mod+[",
+    "mod+]",
+    "mod+alt+[",
+    "mod+alt+]",
     ...Array.from({ length: 9 }, (_, i) => `mod+${i + 1}`),
   ])
 
@@ -62,6 +69,35 @@ describe("SESSION_SWITCHER_KEYBINDS", () => {
 
     expect(new Set(chords).size).toBe(chords.length)
     for (const chord of chords) expect(existingTabKeybinds.has(chord)).toBe(false)
+  })
+
+  // Regression for finding 36536ec7: next/prev were stored as `bracketright`/
+  // `bracketleft` (event.code tokens), which the event.key-based matcher can
+  // never fire, so the chords were dead. Assert they actually match the key
+  // events the browser reports (shift turns `[`/`]` into `{`/`}`).
+  test("next/prev chords fire on the real shifted-bracket key events", () => {
+    const next = parseKeybind(SESSION_SWITCHER_KEYBINDS.next)[0]
+    const prev = parseKeybind(SESSION_SWITCHER_KEYBINDS.prev)[0]
+
+    const nextEvent = new KeyboardEvent("keydown", {
+      key: "}",
+      ctrlKey: next.ctrl,
+      metaKey: next.meta,
+      shiftKey: true,
+    })
+    const prevEvent = new KeyboardEvent("keydown", {
+      key: "{",
+      ctrlKey: prev.ctrl,
+      metaKey: prev.meta,
+      shiftKey: true,
+    })
+
+    expect(matchKeybind([next], nextEvent)).toBe(true)
+    expect(matchKeybind([prev], prevEvent)).toBe(true)
+    // And they must not fire without the shift the glyph requires.
+    expect(matchKeybind([next], new KeyboardEvent("keydown", { key: "}", ctrlKey: next.ctrl, metaKey: next.meta }))).toBe(
+      false,
+    )
   })
 
   test("provides spawn, cycle, and jump-to-index bindings", () => {

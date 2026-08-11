@@ -2,6 +2,9 @@ import { describe, expect, test } from "bun:test"
 import { createRoot } from "solid-js"
 import { createSessionMultiplexer, type SessionMultiplexerHooks } from "./session-multiplexer"
 import type { SessionDriver, SpawnInput } from "./session-manager"
+import { nextTabAfterClose } from "./closed-tabs"
+import type { SessionTab } from "./tabs"
+import type { ServerConnection } from "./server"
 
 // In-memory driver mirroring the core's test seam: create() mints sequential
 // ids and echoes identifying info; close() is a no-op that records calls.
@@ -144,6 +147,74 @@ describe("createSessionMultiplexer", () => {
       expect(mux.state.sessions.map((s) => s.id)).toEqual(["s1"])
       expect(mux.state.focusedID).toBe("s1")
       expect(focused).toEqual(["s1"]) // routed to survivor
+    })
+  })
+
+  // Regression for finding 8ac7aaeb: the tab layer runs its own removal
+  // navigation to a positionally-adjacent survivor when the removed tab is still
+  // active, and that deferred navigation used to override the multiplexer's
+  // post-close focus — so with 3+ sessions the focus indicator (core survivor)
+  // and the actually-open session diverged. This models the tab layer faithfully
+  // (real nextTabAfterClose, recent/active tracking, and startTransition-style
+  // deferral) and asserts the route ends on the core's survivor.
+  test("closing the focused session routes to the core survivor, not the tab-strip's", async () => {
+    await withRoot(async () => {
+      const { driver } = fakeDriver()
+
+      const server = "local\nhttp://localhost:4096" as ServerConnection.Key
+      const tabs: SessionTab[] = []
+      let recentKey: string | undefined
+      let route: string | undefined
+      const deferred: Array<() => void> = []
+      const flush = () => {
+        while (deferred.length) deferred.shift()!()
+      }
+      const addTab = (id: string) => {
+        if (!tabs.some((tab) => tab.sessionId === id)) tabs.push({ type: "session", server, sessionId: id })
+      }
+      // Models tabs.select: mark active + navigate synchronously.
+      const select = (id: string) => {
+        addTab(id)
+        recentKey = id
+        route = id
+      }
+      // Models tabs.removeSessionTab -> removeTab: only the active tab triggers
+      // the deferred positional navigation, via the real nextTabAfterClose.
+      const removeSessionTab = (id: string) => {
+        const index = tabs.findIndex((tab) => tab.sessionId === id)
+        if (index === -1) return
+        const active = recentKey === id && route !== "/"
+        const next = nextTabAfterClose(tabs, index, active)
+        tabs.splice(index, 1)
+        deferred.push(() => {
+          if (next === null) {
+            recentKey = undefined
+            route = "/"
+          } else if (next && next.type === "session") {
+            select(next.sessionId)
+          }
+        })
+      }
+
+      const mux = createSessionMultiplexer(driver, {
+        onSpawn: (session) => addTab(session.id),
+        onFocus: (session) => select(session.id),
+        onClose: (id) => removeSessionTab(id),
+      })
+
+      await mux.spawn() // s1
+      await mux.spawn() // s2
+      await mux.spawn() // s3 (focused)
+      mux.focus("s1") // make s1 the most-recently-focused survivor-to-be
+      mux.focus("s3") // refocus s3; survivors {s1, s2}, core MRU survivor = s1
+      flush()
+
+      await mux.close("s3")
+      flush() // drain any deferred tab-strip navigation
+
+      // Positional survivor for s3 (last tab) would be s2; the core picks s1.
+      expect(mux.state.focusedID).toBe("s1")
+      expect(route).toBe("s1")
     })
   })
 
